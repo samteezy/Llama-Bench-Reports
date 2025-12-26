@@ -237,6 +237,9 @@ function getSplitModes() {
  * @property {number} sample_count - Number of samples
  */
 
+/** @type {string[]} Valid columns for groupBy parameter in getTrends */
+const VALID_GROUP_BY_COLUMNS = ['build_commit', 'model_filename', 'model_type', 'gpu_info', 'test_type', 'backend', ...VALID_DIMENSION_KEYS];
+
 /**
  * Get aggregated trend data for performance over time.
  * @param {GetTrendsOptions} [options] - Query options
@@ -244,6 +247,12 @@ function getSplitModes() {
  */
 function getTrends({ model, testType = 'tg', groupBy = 'build_commit' } = {}) {
   const db = getDb();
+
+  // Validate groupBy to prevent SQL injection
+  if (!VALID_GROUP_BY_COLUMNS.includes(groupBy)) {
+    groupBy = 'build_commit';
+  }
+
   let query = `
     SELECT
       ${groupBy},

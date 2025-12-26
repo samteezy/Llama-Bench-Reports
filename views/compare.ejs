@@ -1,3 +1,19 @@
+<%
+/**
+ * HTML escape function to prevent XSS attacks.
+ * @param {*} str - Value to escape
+ * @returns {string} HTML-escaped string
+ */
+function escapeHtml(str) {
+  if (str === null || str === undefined) return 'N/A';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+%>
 <%- include('layout', { body: `
 <h1>Compare</h1>
 
@@ -5,11 +21,11 @@
   <div class="grid">
     <label>
       Models (comma-separated)
-      <input type="text" name="models" value="${filters.models || ''}" placeholder="model1.gguf,model2.gguf">
+      <input type="text" name="models" value="${escapeHtml(filters.models || '')}" placeholder="model1.gguf,model2.gguf">
     </label>
     <label>
       Builds (comma-separated commits)
-      <input type="text" name="commits" value="${filters.commits || ''}" placeholder="abc1234,def5678">
+      <input type="text" name="commits" value="${escapeHtml(filters.commits || '')}" placeholder="abc1234,def5678">
     </label>
   </div>
   <div class="grid">
@@ -82,5 +98,5 @@ ${comparison.length > 0 ? `
 </script>
 ` : ''}
 
-${comparison.length > 0 ? '<h2>Comparison Data</h2><div class="overflow-auto"><table><thead><tr><th>Model</th><th>Build</th><th>Avg t/s</th><th>Stddev</th><th>Runs</th></tr></thead><tbody>' + comparison.map(c => '<tr><td>' + (c.model_filename || 'N/A') + '</td><td><code>' + (c.build_commit ? c.build_commit.substring(0, 7) : 'N/A') + '</code></td><td><strong>' + (c.avg_tps ? c.avg_tps.toFixed(2) : 'N/A') + '</strong></td><td>' + (c.avg_stddev ? c.avg_stddev.toFixed(2) : 'N/A') + '</td><td>' + (c.runs || 0) + '</td></tr>').join('') + '</tbody></table></div>' : ''}
+${comparison.length > 0 ? '<h2>Comparison Data</h2><div class="overflow-auto"><table><thead><tr><th>Model</th><th>Build</th><th>Avg t/s</th><th>Stddev</th><th>Runs</th></tr></thead><tbody>' + comparison.map(c => '<tr><td>' + escapeHtml(c.model_filename) + '</td><td><code>' + escapeHtml(c.build_commit ? c.build_commit.substring(0, 7) : null) + '</code></td><td><strong>' + (c.avg_tps ? c.avg_tps.toFixed(2) : 'N/A') + '</strong></td><td>' + (c.avg_stddev ? c.avg_stddev.toFixed(2) : 'N/A') + '</td><td>' + (c.runs || 0) + '</td></tr>').join('') + '</tbody></table></div>' : ''}
 `, page: 'compare' }) %>
