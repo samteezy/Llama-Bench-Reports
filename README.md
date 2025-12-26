@@ -23,6 +23,32 @@ npm start
 
 Server runs at `http://localhost:3000` by default.
 
+## Docker
+
+```bash
+# Build
+docker build -t llama-bench-reports .
+
+# Run
+docker run -d -p 3000:3000 -v llama-bench-data:/app/data llama-bench-reports
+```
+
+Or with docker-compose:
+
+```yaml
+services:
+  llama-bench-reports:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - llama-bench-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  llama-bench-data:
+```
+
 ## Submitting Benchmarks
 
 Pipe llama-bench output directly to the API:
