@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benchmarks - Llama Bench Reports</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>Llama Bench Reports</strong></li>
+    </ul>
+    <ul>
+      <li><a href="/">Dashboard</a></li>
+      <li><a href="/benchmarks" class="active">Benchmarks</a></li>
+      <li><a href="/trends">Trends</a></li>
+      <li><a href="/compare">Compare</a></li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    <h1>Benchmarks</h1>
+
+    <form hx-get="/partials/table" hx-target="#benchmarks-table" hx-trigger="change" class="grid">
+      <label>
+        Model
+        <select name="model">
+          <option value="">All Models</option>
+          <% models.forEach(m => { %>
+            <option value="<%= m.model_filename %>" <%= filters.model === m.model_filename ? 'selected' : '' %>><%= m.model_filename %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>
+        Build
+        <select name="commit">
+          <option value="">All Builds</option>
+          <% builds.forEach(b => { %>
+            <option value="<%= b.build_commit %>" <%= filters.commit === b.build_commit ? 'selected' : '' %>><%= b.build_commit ? b.build_commit.substring(0, 7) : 'Unknown' %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>
+        Test Type
+        <select name="test_type">
+          <option value="">All Types</option>
+          <option value="pp" <%= filters.test_type === 'pp' ? 'selected' : '' %>>Prompt Processing (pp)</option>
+          <option value="tg" <%= filters.test_type === 'tg' ? 'selected' : '' %>>Token Generation (tg)</option>
+        </select>
+      </label>
+    </form>
+
+    <div style="margin-bottom: 1rem;">
+      <button id="delete-selected" class="secondary" disabled>Delete Selected (<span id="selected-count">0</span>)</button>
+    </div>
+
+    <div id="benchmarks-table">
+      <%- include('partials/table', { benchmarks, columns, formatCell, selectable: true }) %>
+    </div>
+
+    <script>
+    function initBenchmarkSelection() {
+      const table = document.getElementById('benchmarks-table');
+      const deleteBtn = document.getElementById('delete-selected');
+      const countSpan = document.getElementById('selected-count');
+
+      function updateDeleteButton() {
+        const checked = table.querySelectorAll('.benchmark-checkbox:checked');
+        countSpan.textContent = checked.length;
+        deleteBtn.disabled = checked.length === 0;
+      }
+
+      function attachListeners() {
+        const selectAll = table.querySelector('#select-all');
+        const checkboxes = table.querySelectorAll('.benchmark-checkbox');
+
+        if (selectAll) {
+          selectAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => cb.checked = this.checked);
+            updateDeleteButton();
+          });
+        }
+
+        checkboxes.forEach(cb => {
+          cb.addEventListener('change', function() {
+            if (selectAll) {
+              selectAll.checked = [...checkboxes].every(c => c.checked);
+            }
+            updateDeleteButton();
+          });
+        });
+      }
+
+      attachListeners();
+
+      deleteBtn.addEventListener('click', async function() {
+        const checked = table.querySelectorAll('.benchmark-checkbox:checked');
+        const ids = [...checked].map(cb => parseInt(cb.value, 10));
+
+        if (ids.length === 0) return;
+
+        if (!confirm('Delete ' + ids.length + ' benchmark(s)? This cannot be undone.')) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/benchmarks', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            htmx.trigger(document.querySelector('form'), 'change');
+          } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+          }
+        } catch (err) {
+          alert('Error deleting benchmarks: ' + err.message);
+        }
+      });
+
+      document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'benchmarks-table') {
+          attachListeners();
+          updateDeleteButton();
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', initBenchmarkSelection);
+    </script>
+  </main>
+
+  <footer class="container">
+    <small>Llama Bench Reports - Self-hosted benchmark tracking for llama.cpp</small>
+  </footer>
+</body>
+</html>

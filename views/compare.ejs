@@ -1,0 +1,86 @@
+<%- include('layout', { body: `
+<h1>Compare</h1>
+
+<form hx-get="/compare" hx-target="body" hx-push-url="true">
+  <div class="grid">
+    <label>
+      Models (comma-separated)
+      <input type="text" name="models" value="${filters.models || ''}" placeholder="model1.gguf,model2.gguf">
+    </label>
+    <label>
+      Builds (comma-separated commits)
+      <input type="text" name="commits" value="${filters.commits || ''}" placeholder="abc1234,def5678">
+    </label>
+  </div>
+  <div class="grid">
+    <label>
+      Test Type
+      <select name="test_type">
+        <option value="tg"${(filters.test_type || 'tg') === 'tg' ? ' selected' : ''}>Token Generation (tg)</option>
+        <option value="pp"${filters.test_type === 'pp' ? ' selected' : ''}>Prompt Processing (pp)</option>
+      </select>
+    </label>
+    <button type="submit">Compare</button>
+  </div>
+</form>
+
+<p><small>Tip: Select models and/or builds to compare. Leave one empty to compare all values for the other.</small></p>
+
+${comparison.length === 0 && (filters.models || filters.commits) ? '<p>No matching benchmarks found.</p>' : ''}
+${comparison.length === 0 && !filters.models && !filters.commits ? '<p>Enter models or commits above to compare performance.</p>' : ''}
+
+${comparison.length > 0 ? `
+<div class="chart-container">
+  <canvas id="compareChart"></canvas>
+</div>
+
+<script>
+  (function() {
+    const ctx = document.getElementById('compareChart').getContext('2d');
+    const data = ${JSON.stringify(comparison)};
+
+    // Group by model
+    const models = [...new Set(data.map(d => d.model_filename))];
+    const commits = [...new Set(data.map(d => d.build_commit))];
+
+    const datasets = models.map((model, i) => ({
+      label: model,
+      data: commits.map(commit => {
+        const match = data.find(d => d.model_filename === model && d.build_commit === commit);
+        return match ? match.avg_tps : null;
+      }),
+      backgroundColor: 'hsl(' + (i * 360 / models.length) + ', 70%, 50%)'
+    }));
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: commits.map(c => c ? c.substring(0, 7) : 'Unknown'),
+        datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Performance Comparison'
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Tokens/Second'
+            }
+          }
+        }
+      }
+    });
+  })();
+</script>
+` : ''}
+
+${comparison.length > 0 ? '<h2>Comparison Data</h2><div class="overflow-auto"><table><thead><tr><th>Model</th><th>Build</th><th>Avg t/s</th><th>Stddev</th><th>Runs</th></tr></thead><tbody>' + comparison.map(c => '<tr><td>' + (c.model_filename || 'N/A') + '</td><td><code>' + (c.build_commit ? c.build_commit.substring(0, 7) : 'N/A') + '</code></td><td><strong>' + (c.avg_tps ? c.avg_tps.toFixed(2) : 'N/A') + '</strong></td><td>' + (c.avg_stddev ? c.avg_stddev.toFixed(2) : 'N/A') + '</td><td>' + (c.runs || 0) + '</td></tr>').join('') + '</tbody></table></div>' : ''}
+`, page: 'compare' }) %>

@@ -1,0 +1,27 @@
+{
+  "name": "llama-bench-reports",
+  "version": "1.0.0",
+  "description": "Self-hostable web app for collecting and visualizing llama-bench benchmark results",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "llama",
+    "llama.cpp",
+    "benchmark",
+    "llm",
+    "performance"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

@@ -1,0 +1,45 @@
+<%
+/**
+ * Dynamic benchmark table partial.
+ * Only renders columns that have at least one non-null value.
+ *
+ * Expected variables:
+ * @param {Object[]} benchmarks - Array of benchmark objects
+ * @param {boolean} [selectable=true] - Whether to show checkboxes
+ * @param {ColumnConfig[]} columns - Column configuration from getActiveColumns()
+ * @param {Function} formatCell - Function to format cell values
+ */
+const showCheckbox = typeof selectable !== 'undefined' ? selectable : true;
+%>
+<% if (!benchmarks || benchmarks.length === 0) { %>
+  <p>No benchmarks found matching the criteria.</p>
+<% } else { %>
+<div class="overflow-auto">
+  <table>
+    <thead>
+      <tr>
+        <% if (showCheckbox) { %><th><input type="checkbox" id="select-all" title="Select all"></th><% } %>
+        <% columns.forEach(col => { %>
+          <th><%= col.label %></th>
+        <% }) %>
+      </tr>
+    </thead>
+    <tbody>
+      <% benchmarks.forEach(b => { %>
+      <tr>
+        <% if (showCheckbox) { %><td><input type="checkbox" class="benchmark-checkbox" value="<%= b.id %>"></td><% } %>
+        <% columns.forEach(col => { %>
+          <td>
+            <% if (col.bold) { %><strong><% } %>
+            <% if (col.format === 'code') { %><code><% } %>
+            <%= formatCell(b[col.key], col) %>
+            <% if (col.format === 'code') { %></code><% } %>
+            <% if (col.bold) { %></strong><% } %>
+          </td>
+        <% }) %>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<% } %>

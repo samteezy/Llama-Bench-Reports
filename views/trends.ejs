@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance Trends - Llama Bench Reports</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>Llama Bench Reports</strong></li>
+    </ul>
+    <ul>
+      <li><a href="/">Dashboard</a></li>
+      <li><a href="/benchmarks">Benchmarks</a></li>
+      <li><a href="/trends" class="active">Trends</a></li>
+      <li><a href="/compare">Compare</a></li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    <h1>Performance Trends</h1>
+
+    <form hx-get="/trends" hx-target="body" hx-push-url="true">
+      <div class="grid">
+        <div>
+          <label>Models <a href="#" class="clear-select" onclick="this.parentElement.nextElementSibling.selectedIndex = -1; return false;">(clear)</a></label>
+          <select name="models" multiple size="4">
+            <% models.forEach(m => { %>
+              <option value="<%= m.model_filename %>" <%= (filters.models && filters.models.includes(m.model_filename)) ? 'selected' : '' %>><%= m.model_filename %></option>
+            <% }) %>
+          </select>
+          <small>Hold Ctrl/Cmd to select multiple. Leave empty for all.</small>
+        </div>
+      </div>
+
+      <fieldset>
+        <legend>Test Types</legend>
+        <label>
+          <input type="checkbox" name="test_types" value="pp" <%= (filters.test_types && filters.test_types.includes('pp')) ? 'checked' : '' %>>
+          Prompt Processing (pp)
+        </label>
+        <label>
+          <input type="checkbox" name="test_types" value="tg" <%= (filters.test_types && filters.test_types.includes('tg')) ? 'checked' : '' %>>
+          Token Generation (tg)
+        </label>
+      </fieldset>
+
+      <fieldset class="dimension-selector">
+        <legend>Dimensional Analysis</legend>
+
+        <div class="dimension-tabs">
+          <button type="button" class="tab-btn active" data-tab="group-by" onclick="switchDimensionTab('group-by')">
+            Group By (Series)
+          </button>
+          <button type="button" class="tab-btn" data-tab="filter" onclick="switchDimensionTab('filter')">
+            Filter (Hold Constant)
+          </button>
+        </div>
+
+        <div class="tab-content" id="group-by-tab">
+          <small>Select dimensions to create separate chart series. Each unique combination gets its own line.</small>
+          <div class="dimension-groups">
+            <% Object.entries(dimensionsByGroup).forEach(([group, dims]) => { %>
+              <div class="dimension-group">
+                <strong><%= group %></strong>
+                <% dims.forEach(dim => { %>
+                  <label class="dimension-checkbox">
+                    <input type="checkbox" name="group_by" value="<%= dim.key %>" <%= (filters.group_by || []).includes(dim.key) ? 'checked' : '' %>>
+                    <%= dim.label %>
+                  </label>
+                <% }) %>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+
+        <div class="tab-content" id="filter-tab" style="display: none;">
+          <small>Select specific values to hold constant. Only matching data will be shown.</small>
+          <div class="filter-groups">
+            <% Object.entries(dimensionsByGroup).forEach(([group, dims]) => { %>
+              <div class="filter-group">
+                <strong><%= group %></strong>
+                <% dims.forEach(dim => {
+                  const values = dimensionValues[dim.key] || [];
+                  const selectedVals = (filters.dimension_filters || {})[dim.key] || [];
+                  const selectedValStrings = selectedVals.map(v => String(v));
+                %>
+                  <div class="filter-dimension">
+                    <label><%= dim.label %></label>
+                    <% if (values.length > 0) { %>
+                      <select name="filter_<%= dim.key %>" multiple size="3">
+                        <% values.forEach(v => { %>
+                          <option value="<%= v.value %>" <%= selectedValStrings.includes(String(v.value)) ? 'selected' : '' %>>
+                            <% if (dim.type === 'boolean') { %>
+                              <%= (v.value === 1 || v.value === '1') ? 'Yes' : 'No' %>
+                            <% } else { %>
+                              <%= v.value %>
+                            <% } %>
+                            (<%= v.count %>)
+                          </option>
+                        <% }) %>
+                      </select>
+                    <% } else { %>
+                      <select disabled><option>No data</option></select>
+                    <% } %>
+                  </div>
+                <% }) %>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      </fieldset>
+
+      <button type="submit">Update</button>
+    </form>
+
+    <script>
+      function switchDimensionTab(tabName) {
+        document.querySelectorAll('.dimension-tabs .tab-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.tab === tabName);
+        });
+        document.getElementById('group-by-tab').style.display = tabName === 'group-by' ? 'block' : 'none';
+        document.getElementById('filter-tab').style.display = tabName === 'filter' ? 'block' : 'none';
+      }
+    </script>
+
+    <fieldset id="chart-options">
+      <legend>Chart Options</legend>
+      <div class="grid">
+        <div>
+          <label>X-Axis</label>
+          <label>
+            <input type="radio" name="x_axis_mode" value="build" checked>
+            Build Commit
+          </label>
+          <label>
+            <input type="radio" name="x_axis_mode" value="date">
+            Date
+          </label>
+        </div>
+        <div>
+          <label>Y-Axis Scale</label>
+          <label>
+            <input type="checkbox" id="log_scale">
+            Logarithmic
+          </label>
+        </div>
+      </div>
+    </fieldset>
+
+    <% if (trends.length === 0) { %>
+      <p>No trend data available. Submit some benchmarks first, or adjust your filters.</p>
+    <% } else { %>
+      <div class="chart-container"><canvas id="trendsChart"></canvas></div>
+
+      <script>
+        (function() {
+          const ctx = document.getElementById('trendsChart').getContext('2d');
+          const rawData = <%- JSON.stringify(trends) %>;
+          const groupByDimensions = <%- JSON.stringify(filters.group_by || []) %>;
+          let chart = null;
+
+          const dimensionLabels = {
+            n_gpu_layers: 'GPU Layers',
+            split_mode: 'Split',
+            main_gpu: 'Main GPU',
+            n_batch: 'Batch',
+            n_ubatch: 'uBatch',
+            n_ctx: 'Ctx',
+            n_prompt: 'Prompt',
+            n_gen: 'Gen',
+            n_depth: 'Depth',
+            flash_attn: 'FA',
+            cache_type_k: 'K$',
+            cache_type_v: 'V$',
+            embeddings: 'Emb',
+            n_threads: 'Threads',
+            backend: 'Backend'
+          };
+
+          const colors = [
+            'rgb(75, 192, 192)', 'rgb(54, 162, 235)', 'rgb(255, 99, 132)',
+            'rgb(255, 205, 86)', 'rgb(153, 102, 255)', 'rgb(255, 159, 64)',
+            'rgb(201, 203, 207)', 'rgb(83, 102, 255)', 'rgb(255, 99, 255)',
+            'rgb(99, 255, 132)', 'rgb(255, 128, 0)', 'rgb(128, 0, 255)',
+            'rgb(0, 255, 128)', 'rgb(255, 0, 128)', 'rgb(128, 255, 0)', 'rgb(0, 128, 255)'
+          ];
+
+          function formatDate(dateStr) {
+            if (!dateStr) return 'N/A';
+            const d = new Date(dateStr);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                   String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' +
+                   String(d.getMinutes()).padStart(2, '0');
+          }
+
+          function buildSeriesKey(d) {
+            const parts = [d.model_filename || 'Unknown', d.test_type];
+            groupByDimensions.forEach(dim => {
+              const value = d[dim];
+              if (value !== null && value !== undefined) {
+                const label = dimensionLabels[dim] || dim;
+                if (dim === 'flash_attn' || dim === 'embeddings') {
+                  parts.push(label + ':' + (value ? 'Y' : 'N'));
+                } else {
+                  parts.push(label + ':' + value);
+                }
+              }
+            });
+            return parts.join(' | ');
+          }
+
+          function buildChart() {
+            const xAxisMode = document.querySelector('input[name="x_axis_mode"]:checked').value;
+            const useLogScale = document.getElementById('log_scale').checked;
+
+            const seriesMap = {};
+            rawData.forEach(d => {
+              const key = buildSeriesKey(d);
+              if (!seriesMap[key]) seriesMap[key] = [];
+              seriesMap[key].push(d);
+            });
+
+            const seriesCount = Object.keys(seriesMap).length;
+            let warningEl = document.querySelector('.series-warning');
+            if (seriesCount > 15) {
+              if (!warningEl) {
+                warningEl = document.createElement('div');
+                warningEl.className = 'series-warning' + (seriesCount > 30 ? ' danger' : '');
+                document.querySelector('.chart-container').before(warningEl);
+              }
+              warningEl.textContent = 'Note: ' + seriesCount + ' series detected. Consider adding filters.';
+            } else if (warningEl) {
+              warningEl.remove();
+            }
+
+            let xLabels, xAxisTitle;
+
+            if (xAxisMode === 'date') {
+              const allDates = [...new Set(rawData.map(d => d.test_time))].sort();
+              xLabels = allDates.map(formatDate);
+              xAxisTitle = 'Date';
+
+              const datasets = Object.entries(seriesMap).map(([key, points], i) => {
+                const dateToTps = {};
+                points.forEach(p => { dateToTps[p.test_time] = p.avg_tps; });
+                return {
+                  label: key,
+                  data: allDates.map(date => dateToTps[date] || null),
+                  borderColor: colors[i % colors.length],
+                  backgroundColor: colors[i % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                  fill: false, tension: 0.1, spanGaps: true
+                };
+              });
+              renderChart(xLabels, datasets, xAxisTitle, useLogScale);
+            } else {
+              const allBuilds = [...new Set(rawData.map(d => d.build_commit))];
+              xLabels = allBuilds.map(b => b ? b.substring(0, 7) : 'N/A');
+              xAxisTitle = 'Build Commit';
+
+              const datasets = Object.entries(seriesMap).map(([key, points], i) => {
+                const buildToTps = {};
+                points.forEach(p => { buildToTps[p.build_commit] = p.avg_tps; });
+                return {
+                  label: key,
+                  data: allBuilds.map(build => buildToTps[build] || null),
+                  borderColor: colors[i % colors.length],
+                  backgroundColor: colors[i % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                  fill: false, tension: 0.1, spanGaps: true
+                };
+              });
+              renderChart(xLabels, datasets, xAxisTitle, useLogScale);
+            }
+          }
+
+          function renderChart(labels, datasets, xAxisTitle, useLogScale) {
+            if (chart) chart.destroy();
+
+            // Determine which test types are present in datasets
+            const hasPP = datasets.some(ds => ds.label.includes('| pp'));
+            const hasTG = datasets.some(ds => ds.label.includes('| tg'));
+            const useDualAxis = hasPP && hasTG;
+
+            // Assign yAxisID to each dataset based on test type
+            datasets.forEach(ds => {
+              if (useDualAxis) {
+                ds.yAxisID = ds.label.includes('| tg') ? 'y-tg' : 'y-pp';
+              } else {
+                ds.yAxisID = 'y';
+              }
+            });
+
+            // Build scales config
+            const scales = {
+              x: { title: { display: true, text: xAxisTitle } }
+            };
+
+            if (useDualAxis) {
+              scales['y-pp'] = {
+                type: useLogScale ? 'logarithmic' : 'linear',
+                position: 'left',
+                beginAtZero: false,
+                title: { display: true, text: 'Prompt Processing (t/s)' + (useLogScale ? ' (log)' : '') },
+                grid: { drawOnChartArea: true }
+              };
+              scales['y-tg'] = {
+                type: useLogScale ? 'logarithmic' : 'linear',
+                position: 'right',
+                beginAtZero: false,
+                title: { display: true, text: 'Token Generation (t/s)' + (useLogScale ? ' (log)' : '') },
+                grid: { drawOnChartArea: false }
+              };
+            } else {
+              scales.y = {
+                type: useLogScale ? 'logarithmic' : 'linear',
+                beginAtZero: false,
+                title: { display: true, text: 'Tokens/Second' + (useLogScale ? ' (log)' : '') }
+              };
+            }
+
+            chart = new Chart(ctx, {
+              type: 'line',
+              data: { labels: labels, datasets: datasets },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  title: { display: true, text: 'Performance Over ' + (xAxisTitle === 'Date' ? 'Time' : 'Builds') },
+                  legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) label += ': ';
+                        if (context.parsed.y !== null) label += context.parsed.y.toFixed(2) + ' t/s';
+                        return label;
+                      }
+                    }
+                  }
+                },
+                scales: scales
+              }
+            });
+          }
+
+          buildChart();
+          document.querySelectorAll('input[name="x_axis_mode"]').forEach(r => r.addEventListener('change', buildChart));
+          document.getElementById('log_scale').addEventListener('change', buildChart);
+        })();
+      </script>
+    <% } %>
+
+    <% if (benchmarks.length > 0) { %>
+      <h2>Data Table</h2>
+      <%- include('partials/table', { benchmarks, columns, formatCell, selectable: false }) %>
+    <% } %>
+  </main>
+
+  <footer class="container">
+    <small>Llama Bench Reports - Self-hosted benchmark tracking for llama.cpp</small>
+  </footer>
+</body>
+</html>

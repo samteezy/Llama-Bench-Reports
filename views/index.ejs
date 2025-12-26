@@ -1,0 +1,38 @@
+<%- include('layout', { body: `
+<h1>Dashboard</h1>
+
+<div class="grid">
+  <article>
+    <header>Total Benchmarks</header>
+    <h2>${stats.total_benchmarks || 0}</h2>
+  </article>
+  <article>
+    <header>Unique Models</header>
+    <h2>${stats.unique_models || 0}</h2>
+  </article>
+  <article>
+    <header>Unique Builds</header>
+    <h2>${stats.unique_builds || 0}</h2>
+  </article>
+</div>
+
+<div class="grid">
+  <article>
+    <header>Avg Token Generation</header>
+    <h2>${stats.avg_tg_tps ? stats.avg_tg_tps.toFixed(2) : 'N/A'} <small>t/s</small></h2>
+  </article>
+  <article>
+    <header>Avg Prompt Processing</header>
+    <h2>${stats.avg_pp_tps ? stats.avg_pp_tps.toFixed(2) : 'N/A'} <small>t/s</small></h2>
+  </article>
+  <article>
+    <header>Latest Test</header>
+    <p>${stats.latest_test || 'No data'}</p>
+  </article>
+</div>
+
+<h2>Recent Benchmarks</h2>
+${recentBenchmarks.length === 0 ? '<p>No benchmarks yet. Submit data using the API.</p><pre><code>llama-bench -o json | curl -X POST -H "Content-Type: application/json" -d @- http://localhost:${process.env.PORT || 3000}/api/benchmarks</code></pre>' : ''}
+
+${recentBenchmarks.length > 0 ? '<div class="overflow-auto"><table><thead><tr><th>Model</th><th>Type</th><th>Test</th><th>t/s</th><th>Batch</th><th>Threads</th><th>GPU Layers</th><th>Build</th><th>Time</th></tr></thead><tbody>' + recentBenchmarks.map(b => '<tr><td>' + (b.model_filename || 'N/A') + '</td><td>' + (b.model_type || 'N/A') + '</td><td>' + (b.test_type || 'N/A') + '</td><td>' + (b.tokens_per_second ? b.tokens_per_second.toFixed(2) : 'N/A') + '</td><td>' + (b.n_batch || 'N/A') + '</td><td>' + (b.n_threads || 'N/A') + '</td><td>' + (b.n_gpu_layers || 'N/A') + '</td><td><code>' + (b.build_commit ? b.build_commit.substring(0, 7) : 'N/A') + '</code></td><td>' + (b.test_time || 'N/A') + '</td></tr>').join('') + '</tbody></table></div>' : ''}
+`, page: 'dashboard' }) %>
