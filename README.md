@@ -2,7 +2,7 @@
 
 A self-hostable web app for collecting and visualizing [llama-bench](https://github.com/ggml-org/llama.cpp/tree/master/tools/llama-bench) benchmark results from llama.cpp.
 
-> **Note:** This is a vibe-coded project. Built fast, works well, no overthinking. PRs welcome if something breaks.
+> **Note:** This is a vibe-coded project. Built fast, works well, no overthinking. PRs welcome if something breaks, but no guarantees I'll get to it.
 
 ## Features
 
